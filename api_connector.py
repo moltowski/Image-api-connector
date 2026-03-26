@@ -124,25 +124,8 @@ class APIConnectorEdit:
                 "output_format": "png", 
                 "sync_mode": True, 
             } 
-        elif model == "seedream_4.5": 
-            url = "https://fal.run/fal-ai/bytedance/seedream/v4.5/edit" 
-            payload = { 
-                "prompt": prompt, 
-                "image_urls": img_data_uris, 
-                "num_images": min(num_images, 6), 
-                "seed": seed, 
-                "enable_safety_checker": enable_safety_checker, 
-                "sync_mode": True, 
-            } 
-            if custom_size: 
-                if not (1920 <= width <= 4096 and 1920 <= height <= 4096): 
-                    raise ValueError("Seedream 4.5: Width/height must be 1920-4096px.") 
-                area = width * height 
-                if not (3686400 <= area <= 16777216): 
-                    raise ValueError(f"Seedream 4.5: Image area must be 3,686,400-16,777,216px. Got {area}.") 
-                payload["image_size"] = {"width": width, "height": height}
-        elif model == "seedream_5_lite":
-            url = "https://fal.run/fal-ai/bytedance/seedream/v5/lite/edit"
+        elif model == "seedream_4.5":
+            url = "https://fal.run/fal-ai/bytedance/seedream/v4.5/edit"
             payload = {
                 "prompt": prompt,
                 "image_urls": img_data_uris,
@@ -152,14 +135,16 @@ class APIConnectorEdit:
                 "sync_mode": True,
             }
             if custom_size:
-                # Validate aspect ratio range 1:16 to 16:1
-                aspect = width / height
-                if not (1/16 <= aspect <= 16):
-                    raise ValueError(f"Seedream 5 Lite: Aspect ratio must be between 1:16 and 16:1. Got {aspect:.2f}")
+                if not (1920 <= width <= 4096 and 1920 <= height <= 4096):
+                    raise ValueError("Seedream 4.5: Width/height must be 1920-4096px.")
+                area = width * height
+                if not (3686400 <= area <= 16777216):
+                    raise ValueError(f"Seedream 4.5: Image area must be 3,686,400-16,777,216px² (min 1920×1920, max 4096×4096). Got {area}.")
                 payload["image_size"] = {"width": width, "height": height}
             else:
-                # Use aspect_ratio presets for Seedream 5 Lite
-                # Valid: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9, auto_2K, auto_3K
+                # Map aspect_ratio dropdown to API preset strings.
+                # Valid presets: square_hd, square, portrait_4_3, portrait_16_9,
+                #                landscape_4_3, landscape_16_9, auto_2K, auto_4K
                 if aspect_ratio == "16:9":
                     payload["image_size"] = "landscape_16_9"
                 elif aspect_ratio == "9:16":
@@ -171,13 +156,49 @@ class APIConnectorEdit:
                 elif aspect_ratio == "1:1":
                     payload["image_size"] = "square_hd"
                 else:
-                    # Default to auto based on resolution parameter
-                    if resolution == "4K":
-                        payload["image_size"] = "auto_3K"
-                    elif resolution == "2K":
-                        payload["image_size"] = "auto_2K"
-                    else:
-                        payload["image_size"] = "auto_2K"
+                    # Fall back to resolution-based auto preset.
+                    # Seedream 4.5 uses auto_4K (not auto_3K — that belongs to v5 Lite).
+                    payload["image_size"] = "auto_4K" if resolution == "4K" else "auto_2K"
+        elif model == "seedream_5_lite":
+            url = "https://fal.run/fal-ai/bytedance/seedream/v5/lite/edit"
+            payload = {
+                "prompt": prompt,
+                "image_urls": img_data_uris,
+                "num_images": min(num_images, 6),
+                "seed": seed,
+                "enable_safety_checker": enable_safety_checker,
+                "sync_mode": True,
+            }
+            if custom_size:
+                # Aspect ratio must be between 1:16 and 16:1
+                aspect = width / height
+                if not (1/16 <= aspect <= 16):
+                    raise ValueError(f"Seedream 5 Lite: Aspect ratio must be between 1:16 and 16:1. Got {aspect:.2f}")
+                # Max output is 3072×3072 (9,437,184 px²); min is ~2560×1440 (3,686,400 px²)
+                area = width * height
+                if area > 9437184:
+                    raise ValueError(f"Seedream 5 Lite: Image area exceeds maximum 9,437,184px² (3072×3072). Got {area}.")
+                if area < 3686400:
+                    raise ValueError(f"Seedream 5 Lite: Image area below minimum 3,686,400px² (approx 2560×1440). Got {area}.")
+                payload["image_size"] = {"width": width, "height": height}
+            else:
+                # Map aspect_ratio dropdown to API preset strings.
+                # Valid presets: square_hd, square, portrait_4_3, portrait_16_9,
+                #                landscape_4_3, landscape_16_9, auto_2K, auto_3K
+                if aspect_ratio == "16:9":
+                    payload["image_size"] = "landscape_16_9"
+                elif aspect_ratio == "9:16":
+                    payload["image_size"] = "portrait_16_9"
+                elif aspect_ratio == "4:3":
+                    payload["image_size"] = "landscape_4_3"
+                elif aspect_ratio == "3:4":
+                    payload["image_size"] = "portrait_4_3"
+                elif aspect_ratio == "1:1":
+                    payload["image_size"] = "square_hd"
+                else:
+                    # Fall back to resolution-based auto preset.
+                    # Seedream 5 Lite uses auto_3K (not auto_4K — that belongs to v4.5).
+                    payload["image_size"] = "auto_3K" if resolution == "4K" else "auto_2K"
         elif model == "qwen_edit_plus": 
             url = "https://fal.run/fal-ai/qwen-image-edit-plus" 
             payload = { 
