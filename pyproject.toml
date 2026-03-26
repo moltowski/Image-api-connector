@@ -1,0 +1,22 @@
+[project]
+name = "comfyui-api-connector"
+version = "1.0.0"
+description = "ComfyUI custom node for image editing via fal.ai API with support for Nano Banana, Seedream, Qwen, and Flux models"
+authors = [
+    {name = "API Connector Contributors"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.25.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/ComfyUI-APIConnector"
+Repository = "https://github.com/yourusername/ComfyUI-APIConnector"
+Issues = "https://github.com/yourusername/ComfyUI-APIConnector/issues"
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
