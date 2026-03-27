@@ -286,4 +286,45 @@ class APIConnectorEdit:
         else: 
             batched_output = torch.zeros((1, 512, 512, 3)) 
         
-        return (batched_output,) 
+        return (batched_output,)
+
+
+# Supported Seedream aspect ratios as (label_string, float_value) pairs.
+# The float is W/H so closest-match arithmetic works on a single number line.
+_SEEDREAM_RATIOS = [
+    ("1:1",  1 / 1),
+    ("4:3",  4 / 3),
+    ("3:4",  3 / 4),
+    ("16:9", 16 / 9),
+    ("9:16", 9 / 16),
+    ("3:2",  3 / 2),
+    ("2:3",  2 / 3),
+    ("4:5",  4 / 5),
+    ("5:4",  5 / 4),
+    ("21:9", 21 / 9),
+]
+
+
+class SeedreamAspectRatio:
+    """Computes the Seedream-supported aspect ratio that best matches an input image."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("ratio",)
+    FUNCTION = "get_ratio"
+    CATEGORY = "image/api"
+
+    def get_ratio(self, image):
+        # image tensor shape: (B, H, W, C)
+        _, h, w, _ = image.shape
+        img_ratio = w / h
+
+        closest_label = min(_SEEDREAM_RATIOS, key=lambda r: abs(r[1] - img_ratio))[0]
+        return (closest_label,)
