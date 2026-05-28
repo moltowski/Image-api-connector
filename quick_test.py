@@ -1,4 +1,5 @@
 from api_connector import APIConnectorEdit
+from replicate_seedream import ReplicateSeedream45Edit
 
 print("Testing API Connector Node Import...")
 print("=" * 50)
@@ -16,6 +17,13 @@ try:
     print(f"[OK] NSFW control: {'YES' if 'enable_nsfw' in optional else 'NO'}")
     print(f"[OK] Category: {APIConnectorEdit.CATEGORY}")
     print(f"[OK] Function: {APIConnectorEdit.FUNCTION}")
+    replicate_inputs = ReplicateSeedream45Edit.INPUT_TYPES()
+    replicate_required = replicate_inputs.get("required", {})
+    replicate_optional = replicate_inputs.get("optional", {})
+    replicate_images = [name for name in replicate_optional if name.startswith("image")]
+    print(f"[OK] Replicate Seedream node: YES")
+    print(f"[OK] Replicate image inputs: {len(replicate_images)}")
+    print(f"[OK] Replicate token field: {'YES' if 'replicate_token' in replicate_required else 'NO'}")
     print("\n[SUCCESS] All checks passed!")
     
 except Exception as e:

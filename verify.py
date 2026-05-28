@@ -68,7 +68,9 @@ else:
 print("\n4. Importing Node...")
 try:
     from api_connector import APIConnectorEdit
+    from replicate_seedream import ReplicateSeedream45Edit
     print("   [OK] APIConnectorEdit imported successfully")
+    print("   [OK] ReplicateSeedream45Edit imported successfully")
     
     # Check node structure
     print("\n5. Checking Node Structure...")
@@ -107,6 +109,16 @@ try:
     
     if hasattr(APIConnectorEdit, 'CATEGORY'):
         print(f"   [OK] CATEGORY defined: {APIConnectorEdit.CATEGORY}")
+
+    replicate_inputs = ReplicateSeedream45Edit.INPUT_TYPES()
+    replicate_required = replicate_inputs.get('required', {})
+    replicate_optional = replicate_inputs.get('optional', {})
+    replicate_image_inputs = [key for key in replicate_optional.keys() if key.startswith('image')]
+    print("\n6. Checking Replicate Seedream Node...")
+    print(f"   [OK] Required inputs: {len(replicate_required)}")
+    print(f"   [OK] Optional image inputs: {len(replicate_image_inputs)}")
+    print(f"   [OK] Token field: {'replicate_token' in replicate_required}")
+    print(f"   [OK] Function: {ReplicateSeedream45Edit.FUNCTION}")
     
     print("\n" + "=" * 60)
     print("[SUCCESS] VERIFICATION COMPLETE - Node is ready!")

@@ -17,6 +17,8 @@ The **API Connector** node accepts 1–5 images and a text prompt, sends them to
 
 All inference runs remotely on fal.ai infrastructure — no local VRAM required. You pay per image generated.
 
+The package also includes **Replicate Seedream 4.5**, a separate node for `bytedance/seedream-4.5` on Replicate. It accepts up to 14 image sockets, and each connected batched `IMAGE` input is expanded so multiple loaded images can be sent in one request.
+
 ---
 
 ## Installation
@@ -165,6 +167,25 @@ Maximum **6** output images.
 | `aspect_ratio` | DROPDOWN | `auto` | Preset ratio — used by Nano models and as a fallback for Seedream 5 Lite. Options: `auto`, `21:9`, `16:9`, `3:2`, `4:3`, `5:4`, `1:1`, `4:5`, `3:4`, `2:3`, `9:16` |
 | `resolution` | DROPDOWN | `1K` | Rough output scale — `1K`, `2K`, `4K`. Used by Nano Banana Pro and as a fallback for Seedream 5 Lite. |
 | `enable_nsfw` | BOOLEAN | `False` (Safe Mode) | `False` = safety checker **on**; `True` = safety checker **off**. Applies to Seedream 4.5, Seedream 5 Lite, Qwen, and all Flux 2 models. |
+
+## Replicate Seedream 4.5 node
+
+Add Node → `image/api` → **Replicate Seedream 4.5**.
+
+Inputs:
+
+| Input | Type | Notes |
+| --- | --- | --- |
+| `prompt` | STRING | Prompt sent to Replicate |
+| `replicate_token` | STRING | Use `env` to read `REPLICATE_API_TOKEN`, or paste a token directly |
+| `size` | DROPDOWN | `2K`, `4K`, or `custom` |
+| `aspect_ratio` | DROPDOWN | Used when `size` is not `custom`; includes `match_input_image` |
+| `max_images` | INT | Number of outputs to request |
+| `disable_safety_checker` | BOOLEAN | Sends `disable_safety_checker: true` when enabled |
+| `image1` ... `image14` | IMAGE | Optional image inputs; batched IMAGE tensors are expanded |
+| `width`, `height` | INT | Required only for `size = custom` |
+
+For Replicate, local ComfyUI images are converted to PNG data URLs before submission. If a connected `IMAGE` socket contains a batch, every image in that batch is included until the Seedream input limit is reached.
 
 ### Output
 
