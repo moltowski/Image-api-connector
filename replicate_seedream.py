@@ -209,6 +209,24 @@ class ReplicateSeedream45Edit:
     CATEGORY = "image/api"
     OUTPUT_NODE = True
 
+    @classmethod
+    def IS_CHANGED(
+        cls,
+        prompt,
+        replicate_token,
+        size,
+        aspect_ratio,
+        max_images,
+        disable_safety_checker,
+        width=0,
+        height=0,
+        timeout_seconds=300,
+        poll_interval=2.0,
+        **kwargs,
+    ):
+        # Remote API calls should run for every queued ComfyUI generation.
+        return float("NaN")
+
     def run_seedream(
         self,
         prompt,
