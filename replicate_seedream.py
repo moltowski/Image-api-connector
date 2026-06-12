@@ -225,7 +225,7 @@ class ReplicateSeedream45Edit:
         **kwargs,
     ):
         # Remote API calls should run for every queued ComfyUI generation.
-        return float("NaN")
+        return time.time()
 
     def run_seedream(
         self,
