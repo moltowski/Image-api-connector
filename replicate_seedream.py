@@ -9,8 +9,28 @@ import torch
 from PIL import Image
 
 
-REPLICATE_MODEL_ENDPOINT = "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions"
-MAX_SEEDREAM_INPUT_IMAGES = 14
+# Per-model Replicate configuration. Seedream 4.5 and 5 Pro share the same
+# input field names (size / aspect_ratio / image_input / max_images /
+# disable_safety_checker) and only differ on the endpoint, the allowed size
+# presets, and the reference-image cap.
+REPLICATE_MODELS = {
+    "seedream-4.5": {
+        "endpoint": "https://api.replicate.com/v1/models/bytedance/seedream-4.5/predictions",
+        "sizes": ("2K", "4K", "custom"),
+        "max_input_images": 14,
+    },
+    "seedream-5-pro": {
+        "endpoint": "https://api.replicate.com/v1/models/bytedance/seedream-5-pro/predictions",
+        "sizes": ("1K", "2K", "custom"),
+        "max_input_images": 10,
+    },
+}
+
+# Fixed number of optional image slots exposed on the node. The per-model cap
+# above is enforced at call time against the images actually connected.
+IMAGE_SLOTS = 14
+
+ASPECT_RATIOS = ["match_input_image", "21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"]
 
 
 def _tensor_item_to_pil(image_array):
@@ -69,26 +89,31 @@ def decode_output_image(output_item):
     return Image.open(BytesIO(response.content)).convert("RGB")
 
 
-def get_replicate_token(replicate_token):
-    token = (replicate_token or "").strip()
-    if token and token not in {"your_replicate_token_here", "env", "ENV"}:
-        return token
+def get_replicate_token():
+    """Read the Replicate token from the environment only.
 
+    The token is deliberately NOT a node widget: keeping it out of INPUT_TYPES
+    means the secret is never shown in the ComfyUI graph and never serialized
+    into a saved workflow .json.
+    """
     token = os.environ.get("REPLICATE_API_TOKEN", "").strip()
     if not token:
-        raise ValueError("Set replicate_token in the node or define REPLICATE_API_TOKEN in the environment.")
+        raise ValueError(
+            "REPLICATE_API_TOKEN is not set. Define it in the ComfyUI process "
+            "environment (e.g. export REPLICATE_API_TOKEN=r8_...)."
+        )
     return token
 
 
-def collect_image_data_uris(*image_inputs):
+def collect_image_data_uris(image_inputs, max_input_images):
     data_uris = []
     for image_tensor in image_inputs:
         for pil_image in tensor_batch_to_pils(image_tensor):
             data_uris.append(pil_to_data_uri(pil_image))
 
-    if len(data_uris) > MAX_SEEDREAM_INPUT_IMAGES:
+    if len(data_uris) > max_input_images:
         raise ValueError(
-            f"Seedream 4.5 on Replicate accepts at most {MAX_SEEDREAM_INPUT_IMAGES} input images. "
+            f"This Seedream model accepts at most {max_input_images} input images. "
             f"Received {len(data_uris)} images across connected inputs/batches."
         )
 
@@ -96,6 +121,7 @@ def collect_image_data_uris(*image_inputs):
 
 
 def build_seedream_input(
+    model,
     prompt,
     image_input,
     size,
@@ -107,6 +133,12 @@ def build_seedream_input(
 ):
     if not prompt or not prompt.strip():
         raise ValueError("Prompt is required.")
+
+    allowed_sizes = REPLICATE_MODELS[model]["sizes"]
+    if size not in allowed_sizes:
+        raise ValueError(
+            f"{model} supports size {list(allowed_sizes)} only. Got '{size}'."
+        )
 
     if aspect_ratio == "match_input_image" and not image_input:
         raise ValueError("aspect_ratio='match_input_image' requires at least one input image.")
@@ -136,14 +168,14 @@ def build_seedream_input(
     return payload
 
 
-def create_prediction(token, input_payload, wait_seconds):
+def create_prediction(token, endpoint, input_payload, wait_seconds):
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "Prefer": f"wait={max(1, min(int(wait_seconds), 60))}",
     }
     response = requests.post(
-        REPLICATE_MODEL_ENDPOINT,
+        endpoint,
         json={"input": input_payload},
         headers=headers,
         timeout=max(65, int(wait_seconds) + 10),
@@ -178,19 +210,19 @@ def poll_prediction(token, prediction, timeout_seconds, poll_interval):
     return prediction
 
 
-class ReplicateSeedream45Edit:
+class ReplicateSeedreamEdit:
     @classmethod
     def INPUT_TYPES(cls):
-        optional_images = {f"image{i}": ("IMAGE",) for i in range(1, MAX_SEEDREAM_INPUT_IMAGES + 1)}
+        optional_images = {f"image{i}": ("IMAGE",) for i in range(1, IMAGE_SLOTS + 1)}
         return {
             "required": {
-                "prompt": ("STRING", {"default": "Edit or generate an image with Seedream 4.5.", "multiline": True}),
-                "replicate_token": ("STRING", {"default": "env"}),
-                "size": (["2K", "4K", "custom"], {"default": "4K"}),
-                "aspect_ratio": (
-                    ["match_input_image", "21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"],
-                    {"default": "match_input_image"},
-                ),
+                "prompt": ("STRING", {"default": "Edit or generate an image with Seedream.", "multiline": True}),
+                "model": (list(REPLICATE_MODELS.keys()), {"default": "seedream-5-pro"}),
+                # No replicate_token widget on purpose: the token is read from the
+                # REPLICATE_API_TOKEN env var so it is never shown in the graph nor
+                # saved into the workflow .json.
+                "size": (["1K", "2K", "4K", "custom"], {"default": "2K"}),
+                "aspect_ratio": (ASPECT_RATIOS, {"default": "match_input_image"}),
                 "max_images": ("INT", {"default": 1, "min": 1, "max": 15}),
                 "disable_safety_checker": ("BOOLEAN", {"default": False, "label_on": "Relax safety checker", "label_off": "Default safety"}),
             },
@@ -210,27 +242,14 @@ class ReplicateSeedream45Edit:
     OUTPUT_NODE = True
 
     @classmethod
-    def IS_CHANGED(
-        cls,
-        prompt,
-        replicate_token,
-        size,
-        aspect_ratio,
-        max_images,
-        disable_safety_checker,
-        width=0,
-        height=0,
-        timeout_seconds=300,
-        poll_interval=2.0,
-        **kwargs,
-    ):
+    def IS_CHANGED(cls, *args, **kwargs):
         # Remote API calls should run for every queued ComfyUI generation.
         return time.time()
 
     def run_seedream(
         self,
         prompt,
-        replicate_token,
+        model,
         size,
         aspect_ratio,
         max_images,
@@ -241,11 +260,17 @@ class ReplicateSeedream45Edit:
         poll_interval=2.0,
         **kwargs,
     ):
-        token = get_replicate_token(replicate_token)
-        image_tensors = [kwargs.get(f"image{i}") for i in range(1, MAX_SEEDREAM_INPUT_IMAGES + 1)]
-        image_input = collect_image_data_uris(*image_tensors)
+        if model not in REPLICATE_MODELS:
+            raise ValueError(f"Unknown model '{model}'. Expected one of {list(REPLICATE_MODELS)}.")
+
+        config = REPLICATE_MODELS[model]
+        token = get_replicate_token()
+
+        image_tensors = [kwargs.get(f"image{i}") for i in range(1, IMAGE_SLOTS + 1)]
+        image_input = collect_image_data_uris(image_tensors, config["max_input_images"])
 
         input_payload = build_seedream_input(
+            model=model,
             prompt=prompt,
             image_input=image_input,
             size=size,
@@ -256,7 +281,7 @@ class ReplicateSeedream45Edit:
             disable_safety_checker=disable_safety_checker,
         )
 
-        prediction = create_prediction(token, input_payload, timeout_seconds)
+        prediction = create_prediction(token, config["endpoint"], input_payload, timeout_seconds)
         prediction = poll_prediction(token, prediction, timeout_seconds, poll_interval)
 
         output = prediction.get("output")
@@ -273,3 +298,7 @@ class ReplicateSeedream45Edit:
             raise ValueError("No generated images could be decoded from Replicate output.")
 
         return (torch.cat(tensors, dim=0),)
+
+
+# Backwards-compatible alias: existing workflows reference the old class name.
+ReplicateSeedream45Edit = ReplicateSeedreamEdit

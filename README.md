@@ -17,7 +17,7 @@ The **API Connector** node accepts 1–5 images and a text prompt, sends them to
 
 All inference runs remotely on fal.ai infrastructure — no local VRAM required. You pay per image generated.
 
-The package also includes **Replicate Seedream 4.5**, a separate node for `bytedance/seedream-4.5` on Replicate. It accepts up to 14 image sockets, and each connected batched `IMAGE` input is expanded so multiple loaded images can be sent in one request.
+The package also includes **Replicate Seedream (4.5 / 5 Pro)**, a separate node with a `model` dropdown that targets either `bytedance/seedream-4.5` or `bytedance/seedream-5-pro` on Replicate. It accepts up to 14 image sockets, and each connected batched `IMAGE` input is expanded so multiple loaded images can be sent in one request. The Replicate token is read from the `REPLICATE_API_TOKEN` environment variable and is never a node widget, so it is never shown in the graph nor saved into the workflow `.json`.
 
 ---
 
@@ -168,21 +168,29 @@ Maximum **6** output images.
 | `resolution` | DROPDOWN | `1K` | Rough output scale — `1K`, `2K`, `4K`. Used by Nano Banana Pro and as a fallback for Seedream 5 Lite. |
 | `enable_nsfw` | BOOLEAN | `False` (Safe Mode) | `False` = safety checker **on**; `True` = safety checker **off**. Applies to Seedream 4.5, Seedream 5 Lite, Qwen, and all Flux 2 models. |
 
-## Replicate Seedream 4.5 node
+## Replicate Seedream (4.5 / 5 Pro) node
 
-Add Node → `image/api` → **Replicate Seedream 4.5**.
+Add Node → `image/api` → **Replicate Seedream (4.5 / 5 Pro)**.
+
+The Replicate token is **not** a node input. Set it once in the environment that runs ComfyUI:
+
+```bash
+export REPLICATE_API_TOKEN=r8_your_token_here
+```
+
+This keeps the secret out of the node UI and out of any saved workflow `.json`. If the variable is unset, the node raises a clear error at generation time.
 
 Inputs:
 
 | Input | Type | Notes |
 | --- | --- | --- |
 | `prompt` | STRING | Prompt sent to Replicate |
-| `replicate_token` | STRING | Use `env` to read `REPLICATE_API_TOKEN`, or paste a token directly |
-| `size` | DROPDOWN | `2K`, `4K`, or `custom` |
+| `model` | DROPDOWN | `seedream-4.5` or `seedream-5-pro` (default). Selects the Replicate endpoint. |
+| `size` | DROPDOWN | `1K`, `2K`, `4K`, or `custom`. Valid per model: **4.5** → `2K`/`4K`, **5 Pro** → `1K`/`2K`. An out-of-range choice raises a clear error. |
 | `aspect_ratio` | DROPDOWN | Used when `size` is not `custom`; includes `match_input_image` |
 | `max_images` | INT | Number of outputs to request |
 | `disable_safety_checker` | BOOLEAN | Sends `disable_safety_checker: true` when enabled |
-| `image1` ... `image14` | IMAGE | Optional image inputs; batched IMAGE tensors are expanded |
+| `image1` ... `image14` | IMAGE | Optional image inputs; batched IMAGE tensors are expanded. Input cap: **14** for 4.5, **10** for 5 Pro. |
 | `width`, `height` | INT | Required only for `size = custom` |
 
 For Replicate, local ComfyUI images are converted to PNG data URLs before submission. If a connected `IMAGE` socket contains a batch, every image in that batch is included until the Seedream input limit is reached.

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Seedream 5 Pro on Replicate** - the Replicate node now has a `model` dropdown selecting `seedream-4.5` or `seedream-5-pro` (`bytedance/seedream-5-pro`), with per-model size presets (5 Pro: 1K/2K) and reference-image cap (5 Pro: 10).
+
+### Changed
+- **Replicate token is env-only** - the `replicate_token` node widget was removed. The token is read solely from `REPLICATE_API_TOKEN`, so it is never shown in the graph nor serialized into a saved workflow `.json`.
+- Replicate node display name is now "Replicate Seedream (4.5 / 5 Pro)". The `ReplicateSeedream45Edit` mapping key is preserved for backwards compatibility with existing workflows.
+
 ## [1.0.0] - 2026-03-01
 
 ### Added
