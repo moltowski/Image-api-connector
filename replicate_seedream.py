@@ -180,7 +180,9 @@ def create_prediction(token, endpoint, input_payload, wait_seconds):
         headers=headers,
         timeout=max(65, int(wait_seconds) + 10),
     )
-    if response.status_code not in (200, 201):
+    # 200/201 = termine/cree ; 202 = accepte, encore en cours (le Prefer: wait a expire)
+    # -> dans les 3 cas le corps est une prediction valide avec urls.get ; poll_prediction prend le relais.
+    if response.status_code not in (200, 201, 202):
         raise ValueError(f"Replicate API error {response.status_code}: {response.text}")
     return response.json()
 
