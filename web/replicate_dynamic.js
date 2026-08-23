@@ -53,6 +53,17 @@ const TOGGLEABLE = [
     "google_search", "image_search", "allow_fallback_model",
 ];
 
+// Estimated price per OUTPUT image (USD), scraped from the Replicate model
+// pages on 2026-08-24. These are estimates for display only; Replicate can
+// change them at any time. "*" = flat price regardless of resolution/size.
+const PRICES = {
+    "seedream-4.5":       { "*": 0.04 },
+    "seedream-5-pro":     { "1K": 0.045, "2K": 0.09, "custom": 0.09 },
+    "nano-banana-pro":    { "1K": 0.15, "2K": 0.15, "4K": 0.30 },   // fallback tier: $0.035
+    "nano-banana-2":      { "1K": 0.067, "2K": 0.101, "4K": 0.151 },
+    "nano-banana-2-lite": { "*": 0.034 },
+};
+
 const HIDDEN_TYPE = "replicate_hidden";
 
 function findWidget(node, name) {
@@ -87,6 +98,61 @@ function setComboOptions(widget, values) {
     }
 }
 
+// Compute the "≈ $X /img (est.)" string for the node's current widget values.
+function priceText(node) {
+    const mw = findWidget(node, "model");
+    if (!mw) return "";
+    const model = mw.value;
+    const P = PRICES[model];
+    if (!P) return "";
+    let unit;
+    let count = 1;
+    if (model.indexOf("seedream") === 0) {
+        const size = (findWidget(node, "size") || {}).value;
+        unit = (P["*"] !== undefined) ? P["*"] : P[size];
+        const mi = findWidget(node, "max_images");
+        count = mi ? Math.max(1, parseInt(mi.value, 10) || 1) : 1;
+    } else {
+        const rw = findWidget(node, "resolution");
+        const res = rw ? rw.value : "1K";
+        unit = (P["*"] !== undefined) ? P["*"] : P[res];
+    }
+    if (unit === undefined) return "≈ price: n/a (est.)";
+    const per = `≈ $${unit.toFixed(3)}/img`;
+    if (count > 1) return `${per} ×${count} = $${(unit * count).toFixed(3)} (est.)`;
+    return `${per} (est.)`;
+}
+
+// A read-only custom widget that renders the price estimate on the node.
+function ensurePriceWidget(node) {
+    if (node.__priceWidget) return node.__priceWidget;
+    const wdg = {
+        name: "est_price",
+        type: "replicate_price",
+        value: "",
+        draw(ctx, node, width, y, H) {
+            ctx.save();
+            ctx.font = "12px sans-serif";
+            ctx.fillStyle = "#8ec07c";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillText(this.value || "", 14, y + H * 0.5);
+            ctx.restore();
+        },
+        computeSize(width) { return [width, 18]; },
+        serializeValue() { return undefined; }, // never saved into the workflow
+    };
+    node.widgets = node.widgets || [];
+    node.widgets.push(wdg);
+    node.__priceWidget = wdg;
+    return wdg;
+}
+
+function updatePrice(node) {
+    ensurePriceWidget(node).value = priceText(node);
+    node.setDirtyCanvas(true, true);
+}
+
 function applyModel(node) {
     const modelWidget = findWidget(node, "model");
     if (!modelWidget) return;
@@ -115,6 +181,8 @@ function applyModel(node) {
         if (show.has(name)) showWidget(node, w);
         else hideWidget(node, w);
     }
+
+    updatePrice(node);
 
     const sz = node.computeSize();
     // Never shrink below the manually-set width; only fix the height.
@@ -151,6 +219,20 @@ app.registerExtension({
                     return ret;
                 };
             }
+
+            // Refresh the price estimate when cost-driving widgets change.
+            for (const name of ["resolution", "max_images"]) {
+                const cw = findWidget(node, name);
+                if (cw) {
+                    const origCb = cw.callback;
+                    cw.callback = function () {
+                        const ret = origCb ? origCb.apply(this, arguments) : undefined;
+                        updatePrice(node);
+                        return ret;
+                    };
+                }
+            }
+            ensurePriceWidget(node);
 
             // Defer once so widgets restored from a saved graph are in place.
             setTimeout(() => applyModel(node), 0);
