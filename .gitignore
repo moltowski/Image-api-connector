@@ -132,3 +132,8 @@ dmypy.json
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Local Replicate token (never commit)
+.replicate_token
+*.replicate_token
+replicate_token.txt
